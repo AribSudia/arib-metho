@@ -21,20 +21,20 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - run: command -v jq || sudo apt-get install -y jq
       - run: bash tests/run.sh
 
   validate-json:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - run: git ls-files '*.json' | xargs -r -n1 jq empty
 
   validate-coherence:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Shell scripts parse and pass shellcheck
         run: |
           files=$(git ls-files '*.sh')
@@ -54,7 +54,7 @@ jobs:
   measure:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Always-on context stays small
         # Rough estimate (bytes/4), not the platform's tokenizer. It only has to
         # catch growth: CLAUDE.md and STATUS.md load into every session.
