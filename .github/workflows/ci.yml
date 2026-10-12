@@ -1,0 +1,66 @@
+name: CI
+
+# Job names are stable so they can be used as required status checks.
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test-hooks:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - run: command -v jq || sudo apt-get install -y jq
+      - run: bash tests/run.sh
+
+  validate-json:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: git ls-files '*.json' | xargs -r -n1 jq empty
+
+  validate-coherence:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Shell scripts parse and pass shellcheck
+        run: |
+          files=$(git ls-files '*.sh')
+          for f in $files; do bash -n "$f"; done
+          shellcheck -S warning $files
+      - name: Every skill's name matches its directory
+        run: |
+          for s in .claude/skills/*/SKILL.md; do
+            dir=$(basename "$(dirname "$s")")
+            grep -q "^name: $dir$" "$s" || { echo "::error file=$s::name must be '$dir'"; exit 1; }
+          done
+      - name: Every file the installer copies exists
+        run: |
+          grep -oE '"\$SRC/[^"]+"' scripts/install.sh | tr -d '"' | sed 's|\$SRC/||' | grep -v '\*' \
+            | while read -r f; do [ -e "$f" ] || { echo "::error::install.sh references missing $f"; exit 1; }; done
+
+  measure:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Always-on context stays small
+        # Rough estimate (bytes/4), not the platform's tokenizer. It only has to
+        # catch growth: CLAUDE.md and STATUS.md load into every session.
+        run: |
+          budget=2000
+          bytes=$(cat templates/CLAUDE.md templates/memory/STATUS.md | wc -c)
+          est=$((bytes / 4))
+          echo "always-on template estimate: ~${est} tokens (budget ${budget})"
+          [ "$est" -le "$budget" ] || { echo "::error::always-on template is ~${est} tokens, over ${budget}"; exit 1; }
